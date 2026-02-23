@@ -1,45 +1,86 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Leaflet Map with Image Overlay</title>
+  <title>Drag Image on Map</title>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-  <!-- Leaflet CSS -->
+  <!-- Leaflet -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
+
+  <!-- Distortable Image Plugin -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet-distortableimage/dist/leaflet.distortableimage.css"/>
 
   <style>
     body { margin: 0; }
     #map { height: 100vh; }
+
+    .controls {
+      position: absolute;
+      top: 10px;
+      left: 50px;
+      z-index: 1000;
+      background: white;
+      padding: 10px;
+      border-radius: 8px;
+    }
   </style>
 </head>
 <body>
 
+<div class="controls">
+  <input type="file" id="upload" accept="image/*">
+  <button onclick="getCoords()">Get Coordinates</button>
+  <div id="output"></div>
+</div>
+
 <div id="map"></div>
 
-<!-- Leaflet JS -->
 <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet-distortableimage/dist/leaflet.distortableimage.js"></script>
 
 <script>
-  // Create map
-  const map = L.map('map').setView([40.7128, -74.0060], 13);
+  const map = L.map('map').setView([37.7749, -122.4194], 13);
 
-  // Add OpenStreetMap tiles
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     attribution: '&copy; OpenStreetMap contributors'
   }).addTo(map);
 
-  // Define image bounds (southWest, northEast)
-  const imageBounds = [
-    [40.7000, -74.0200],  // bottom-left
-    [40.7300, -73.9800]   // top-right
-  ];
+  let overlay;
 
-  // Add image overlay
-  L.imageOverlay(
-    'https://upload.wikimedia.org/wikipedia/commons/3/3c/Shaki_waterfall.jpg',
-    imageBounds
-  ).addTo(map);
+  document.getElementById('upload').addEventListener('change', function(e) {
+    const file = e.target.files[0];
+    const reader = new FileReader();
+
+    reader.onload = function(event) {
+
+      if (overlay) {
+        map.removeLayer(overlay);
+      }
+
+      overlay = new L.DistortableImageOverlay(event.target.result, {
+        selected: true,
+        actions: [
+          L.DistortableImage.action.Drag,
+          L.DistortableImage.action.Scale,
+          L.DistortableImage.action.Rotate
+        ]
+      }).addTo(map);
+    };
+
+    reader.readAsDataURL(file);
+  });
+
+  function getCoords() {
+    if (!overlay) return;
+
+    const corners = overlay.getCorners();
+
+    document.getElementById('output').innerHTML =
+      corners.map((c, i) =>
+        "Corner " + (i+1) + ": " + c.lat.toFixed(6) + ", " + c.lng.toFixed(6)
+      ).join("<br>");
+  }
 </script>
 
 </body>
