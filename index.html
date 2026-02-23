@@ -1,182 +1,149 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Map + Image Tool</title>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta charset="utf-8"/>
+<title>SVG to GPX</title>
 
-  <!-- Leaflet -->
-  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
-  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+<link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
 
-  <style>
-    body {
-      margin: 0;
-      font-family: Arial;
-      display: flex;
-      height: 100vh;
-    }
-
-    #map {
-      width: 50%;
-      height: 100%;
-    }
-
-    #rightPanel {
-      width: 50%;
-      height: 100%;
-      overflow: auto;
-      border-left: 2px solid black;
-      padding: 15px;
-      box-sizing: border-box;
-    }
-  </style>
+<style>
+body { font-family: Arial; padding: 20px; }
+#map { width: 600px; height: 400px; border: 2px solid black; }
+</style>
 </head>
 <body>
 
+<h2>Upload SVG Route → GPX</h2>
+
+<input type="file" id="upload" accept=".svg">
+<button onclick="exportGPX()">Export GPX</button>
+
+<br><br>
 <div id="map"></div>
 
-<div id="rightPanel">
-  <h3>Image to Line Art Tool</h3>
-
-  <<!DOCTYPE html>
-<html>
-  <head>
-    <title>Convert Image to Line Art / Sketch (with JS)</title>
-    <script src="github-pages-coop-coep-workaround.js"></script>
-  </head>
-  <body>
-    <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.10.0/dist/ort.js"></script>
-    
-    <div>
-      Select one or more images: <input type="file" accept="image/*" multiple id="fileInputEl">
-      <br>
-      Then click here: <button id="startBtn" onclick="main()" disabled>loading model...</button>
-      <br>
-      Save all the resulting line art images: <button id="downloadBtn" disabled onclick="downloadOutputImages()">save</button>
-    </div>
-    <p><a href="https://github.com/josephrocca/image-to-line-art-js">github repo</a> - <a href="https://huggingface.co/rocca/informative-drawings-line-art-onnx">huggingface repo</a></p>
-    
-    <script>
-      if(self.crossOriginIsolated) { // needs to be cross-origin-isolated to use wasm threads. you need to serve this html file with these two headers: https://web.dev/coop-coep/
-        ort.env.wasm.numThreads = navigator.hardwareConcurrency
-      }
-      ort.env.wasm.proxy = true;
-      
-      if(!window.OffscreenCanvas) alert("Your browser doesn't support OffscreenCanvas - a browser feature that was standardized way back in 2018. Please use a modern browser like Chrome, Edge or Brave.");
-      
-      let onnxSession;
-      (async function() {
-        console.log("Downloading model... (see network tab for progress)");
-        onnxSession = await ort.InferenceSession.create('https://huggingface.co/rocca/informative-drawings-line-art-onnx/resolve/main/model.onnx', { executionProviders: ["wasm"] });
-        console.log("Model loaded.");
-        startBtn.disabled = false;
-        startBtn.textContent = "start";
-      })();
-      
-      async function main() {
-        if(!fileInputEl.files[0]) return alert("Please select some images first.");
-        
-        startBtn.disabled = true;
-        startBtn.innerHTML = "processing...";
-        
-        let inputBlob;
-        for(let inputBlob of fileInputEl.files) {
-          let {data, width, height} = await blobToLinearRGBArray(inputBlob);
-
-          const feeds = {'input': new ort.Tensor('float32', data, [1, 3, height, width])};
-
-          console.log("Running inference...");
-          let t = Date.now();
-          const results = await onnxSession.run(feeds);
-          console.log(`Finished in ${Date.now()-t}ms`);
-
-          const out = results["output"]; // greyscale data tensor
-          console.log(`results:`, out);
-
-          let blob = await linearGreyscaleArrayToBlob(out.data, {width:out.dims[3], height:out.dims[2]});
-          let blobUrl = URL.createObjectURL(blob);
-          let imgEl = document.createElement("img");
-          imgEl.dataset.name = inputBlob.name;
-          imgEl.src = blobUrl;
-          document.body.appendChild(imgEl);
-        }
-        
-        startBtn.disabled = false;
-        startBtn.innerHTML = "start";
-        downloadBtn.disabled = false;
-      }
-      
-      async function getBlobImageDims(blob) {
-        let img = await createImageBitmap(blob);
-        return {width:img.width, height:img.height};
-      }
-      
-      async function linearGreyscaleArrayToBlob(linearArr, dims) {
-        let dataArray = [];
-        for(let i = 0; i < linearArr.length; i++) {
-          dataArray.push(linearArr[i]*255); // R
-          dataArray.push(linearArr[i]*255); // G
-          dataArray.push(linearArr[i]*255); // B
-          dataArray.push(1*255);            // A
-        }
-        //let imageData = ctx.createImageData(256, 256);
-        let imageData = new ImageData(new Uint8ClampedArray(dataArray), dims.width, dims.height);
-        let canvas = new OffscreenCanvas(dims.width, dims.height);
-        let ctx = canvas.getContext("2d");
-        ctx.putImageData(imageData, 0, 0);
-        return canvas.convertToBlob({type:"image/jpg"});
-      }
-      
-      // this function resizes to 256px width
-      async function blobToLinearRGBArray(blob) {
-        let img = await createImageBitmap(blob);
-        let canvas = new OffscreenCanvas(img.width, img.height);
-        let ctx = canvas.getContext("2d");
-        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-        let imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-
-        let rgbData = [[], [], []]; // [r, g, b]
-        // remove alpha and put into correct shape:
-        let d = imageData.data;
-        for(let i = 0; i < d.length; i += 4) { 
-          let x = (i/4) % canvas.width;
-          let y = Math.floor((i/4) / canvas.width)
-          if(!rgbData[0][y]) rgbData[0][y] = [];
-          if(!rgbData[1][y]) rgbData[1][y] = [];
-          if(!rgbData[2][y]) rgbData[2][y] = [];
-          rgbData[0][y][x] = d[i+0]/255;
-          rgbData[1][y][x] = d[i+1]/255;
-          rgbData[2][y][x] = d[i+2]/255;
-        }
-        rgbData = Float32Array.from(rgbData.flat().flat());
-        return {data:rgbData, width:img.width, height:img.height};
-      }
-      
-      async function downloadOutputImages() {
-        let directoryHandle = await window.showDirectoryPicker();
-        for(let img of [...document.querySelectorAll("img")]) {
-          let url = img.src;
-          let name = img.dataset.name+".lines.jpg";
-          let fileHandle = await directoryHandle.getFileHandle(name, {create:true});
-          let response = await fetch(url);
-          await response.body.pipeTo(await fileHandle.createWritable());
-        }
-      }
-    </script>
-  </body>
-</html>
-
-  <p>Paste the GitHub tool HTML here.</p>
-</div>
-
 <script>
-  const map = L.map('map').setView([37.7749, -122.4194], 13);
+const map = L.map('map').setView([37.7749, -122.4194], 13);
 
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    attribution: '&copy; OpenStreetMap contributors'
-  }).addTo(map);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+ attribution: '&copy; OpenStreetMap contributors'
+}).addTo(map);
+
+let gpsTrack = [];
+let imageBounds;
+
+document.getElementById("upload").addEventListener("change", function(e){
+ const file = e.target.files[0];
+ const reader = new FileReader();
+
+ reader.onload = function(event){
+   const parser = new DOMParser();
+   const svgDoc = parser.parseFromString(event.target.result, "image/svg+xml");
+   const path = svgDoc.querySelector("path");
+
+   if(!path){
+     alert("No path found in SVG");
+     return;
+   }
+
+   const svgElement = svgDoc.querySelector("svg");
+   const width = parseFloat(svgElement.getAttribute("width")) || 1000;
+   const height = parseFloat(svgElement.getAttribute("height")) || 1000;
+
+   imageBounds = map.getBounds();
+
+   const totalLength = path.getTotalLength();
+   gpsTrack = [];
+
+   for(let i=0; i<=totalLength; i+=5){
+     const pt = path.getPointAtLength(i);
+
+     const west = imageBounds.getWest();
+     const east = imageBounds.getEast();
+     const north = imageBounds.getNorth();
+     const south = imageBounds.getSouth();
+
+     const lng = west + (pt.x / width) * (east - west);
+     const lat = north - (pt.y / height) * (north - south);
+
+     gpsTrack.push([lat, lng]);
+   }
+
+   gpsTrack = simplifyDouglasPeucker(gpsTrack, 0.00005);
+
+   L.polyline(gpsTrack, {color:'red'}).addTo(map);
+
+   alert("Track generated from SVG!");
+ };
+
+ reader.readAsText(file);
+});
+
+function simplifyDouglasPeucker(points, tolerance){
+ if(points.length <= 2) return points;
+
+ const sqTolerance = tolerance * tolerance;
+
+ function getSqSegDist(p, p1, p2){
+   let x = p1[1], y = p1[0];
+   let dx = p2[1]-x, dy = p2[0]-y;
+
+   if(dx!==0 || dy!==0){
+     let t = ((p[1]-x)*dx + (p[0]-y)*dy)/(dx*dx+dy*dy);
+     if(t>1){ x=p2[1]; y=p2[0]; }
+     else if(t>0){ x+=dx*t; y+=dy*t; }
+   }
+
+   dx = p[1]-x; dy = p[0]-y;
+   return dx*dx + dy*dy;
+ }
+
+ function simplifyDP(points, first, last, simplified){
+   let maxDist = sqTolerance, index;
+
+   for(let i=first+1; i<last; i++){
+     const dist = getSqSegDist(points[i], points[first], points[last]);
+     if(dist > maxDist){
+       index = i;
+       maxDist = dist;
+     }
+   }
+
+   if(maxDist > sqTolerance){
+     if(index-first>1) simplifyDP(points, first, index, simplified);
+     simplified.push(points[index]);
+     if(last-index>1) simplifyDP(points, index, last, simplified);
+   }
+ }
+
+ const simplified = [points[0]];
+ simplifyDP(points, 0, points.length-1, simplified);
+ simplified.push(points[points.length-1]);
+
+ return simplified;
+}
+
+function exportGPX(){
+ if(!gpsTrack.length) return;
+
+ let gpx = `<?xml version="1.0" encoding="UTF-8"?>
+<gpx version="1.1" creator="SVGTool">
+<trk><name>SVG Route</name><trkseg>`;
+
+ gpsTrack.forEach(pt=>{
+   gpx += `<trkpt lat="${pt[0]}" lon="${pt[1]}"></trkpt>`;
+ });
+
+ gpx += `</trkseg></trk></gpx>`;
+
+ const blob = new Blob([gpx], {type:"application/gpx+xml"});
+ const url = URL.createObjectURL(blob);
+
+ const a = document.createElement("a");
+ a.href = url;
+ a.download = "route.gpx";
+ a.click();
+}
 </script>
-
 </body>
 </html>
