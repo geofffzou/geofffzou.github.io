@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Drag Image on Map</title>
+  <title>Small Map + Draggable Image</title>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
@@ -12,21 +12,26 @@
   <link rel="stylesheet" href="https://unpkg.com/leaflet-distortableimage/dist/leaflet.distortableimage.css"/>
 
   <style>
-    body { margin: 0; }
-    #map { height: 100vh; }
+    body {
+      font-family: Arial, sans-serif;
+      padding: 30px;
+    }
+
+    #map {
+      width: 500px;      /* Small window */
+      height: 350px;
+      border: 2px solid black;
+      border-radius: 10px;
+    }
 
     .controls {
-      position: absolute;
-      top: 10px;
-      left: 50px;
-      z-index: 1000;
-      background: white;
-      padding: 10px;
-      border-radius: 8px;
+      margin-bottom: 15px;
     }
   </style>
 </head>
 <body>
+
+<h2>Draggable Image Overlay</h2>
 
 <div class="controls">
   <input type="file" id="upload" accept="image/*">
@@ -36,6 +41,7 @@
 
 <div id="map"></div>
 
+<!-- Scripts -->
 <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
 <script src="https://unpkg.com/leaflet-distortableimage/dist/leaflet.distortableimage.js"></script>
 
@@ -62,8 +68,7 @@
         selected: true,
         actions: [
           L.DistortableImage.action.Drag,
-          L.DistortableImage.action.Scale,
-          L.DistortableImage.action.Rotate
+          L.DistortableImage.action.Scale
         ]
       }).addTo(map);
     };
@@ -78,7 +83,9 @@
 
     document.getElementById('output').innerHTML =
       corners.map((c, i) =>
-        "Corner " + (i+1) + ": " + c.lat.toFixed(6) + ", " + c.lng.toFixed(6)
+        "Corner " + (i+1) + ": " +
+        c.lat.toFixed(6) + ", " +
+        c.lng.toFixed(6)
       ).join("<br>");
   }
 </script>
