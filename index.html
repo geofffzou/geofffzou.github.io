@@ -1,15 +1,11 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Small Map + Draggable Image</title>
+  <title>Leaflet SVG Overlay</title>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-  <!-- Leaflet -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
-
-  <!-- Distortable Image Plugin -->
-  <link rel="stylesheet" href="https://unpkg.com/leaflet-distortableimage/dist/leaflet.distortableimage.css"/>
 
   <style>
     body {
@@ -18,7 +14,7 @@
     }
 
     #map {
-      width: 500px;      /* Small window */
+      width: 500px;
       height: 350px;
       border: 2px solid black;
       border-radius: 10px;
@@ -31,19 +27,16 @@
 </head>
 <body>
 
-<h2>Draggable Image Overlay</h2>
+<h2>SVG Draggable Overlay</h2>
 
 <div class="controls">
-  <input type="file" id="upload" accept="image/*">
   <button onclick="getCoords()">Get Coordinates</button>
   <div id="output"></div>
 </div>
 
 <div id="map"></div>
 
-<!-- Scripts -->
 <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
-<script src="https://unpkg.com/leaflet-distortableimage/dist/leaflet.distortableimage.js"></script>
 
 <script>
   const map = L.map('map').setView([37.7749, -122.4194], 13);
@@ -52,41 +45,54 @@
     attribution: '&copy; OpenStreetMap contributors'
   }).addTo(map);
 
-  let overlay;
+  // Initial bounds
+  let bounds = [
+    [37.77, -122.43],   // southwest
+    [37.78, -122.41]    // northeast
+  ];
 
-  document.getElementById('upload').addEventListener('change', function(e) {
-    const file = e.target.files[0];
-    const reader = new FileReader();
+  // Create SVG content
+  const svgContent = `
+    <svg xmlns="http://www.w3.org/2000/svg" width="200" height="200">
+      <circle cx="100" cy="100" r="80"
+              fill="red"
+              fill-opacity="0.5"
+              stroke="black"
+              stroke-width="3"/>
+    </svg>
+  `;
 
-    reader.onload = function(event) {
+  // Add SVG overlay
+  let overlay = L.svgOverlay(svgContent, bounds, {
+    interactive: true
+  }).addTo(map);
 
-      if (overlay) {
-        map.removeLayer(overlay);
-      }
+  // Enable dragging
+  overlay.on('mousedown', function(e) {
+    map.dragging.disable();
+  });
 
-      overlay = new L.DistortableImageOverlay(event.target.result, {
-        selected: true,
-        actions: [
-          L.DistortableImage.action.Drag,
-          L.DistortableImage.action.Scale
-        ]
-      }).addTo(map);
-    };
+  map.on('mouseup', function() {
+    map.dragging.enable();
+  });
 
-    reader.readAsDataURL(file);
+  map.on('mousemove', function(e) {
+    if (!map.dragging._enabled) {
+      const size = 0.01;
+
+      bounds = [
+        [e.latlng.lat - size, e.latlng.lng - size],
+        [e.latlng.lat + size, e.latlng.lng + size]
+      ];
+
+      overlay.setBounds(bounds);
+    }
   });
 
   function getCoords() {
-    if (!overlay) return;
-
-    const corners = overlay.getCorners();
-
     document.getElementById('output').innerHTML =
-      corners.map((c, i) =>
-        "Corner " + (i+1) + ": " +
-        c.lat.toFixed(6) + ", " +
-        c.lng.toFixed(6)
-      ).join("<br>");
+      "SouthWest: " + bounds[0].join(", ") + "<br>" +
+      "NorthEast: " + bounds[1].join(", ");
   }
 </script>
 
