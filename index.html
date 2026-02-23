@@ -1,86 +1,155 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Image to GPX Generator</title>
   <meta charset="utf-8" />
+  <title>Sketch to GPX</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
   <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
+  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
 
   <style>
     body { font-family: Arial; padding: 20px; }
     #map { width: 600px; height: 400px; border: 2px solid black; }
-    .controls { margin-bottom: 10px; }
+    canvas { display: none; }
   </style>
 </head>
 <body>
 
-<h2>Image to GPX Tool</h2>
+<h2>Handwritten Sketch → GPX</h2>
 
-<div class="controls">
-  <input type="file" id="upload" accept="image/*">
-  <button onclick="exportGPX()">Export GPX</button>
-</div>
+<input type="file" id="upload" accept="image/*">
+<button onclick="generateTrack()">Generate Track</button>
+<button onclick="exportGPX()">Export GPX</button>
 
+<br><br>
 <div id="map"></div>
-
-<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+<canvas id="canvas"></canvas>
 
 <script>
-  const map = L.map('map').setView([37.7749, -122.4194], 13);
+const map = L.map('map').setView([37.7749, -122.4194], 13);
 
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    attribution: '&copy; OpenStreetMap contributors'
-  }).addTo(map);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  attribution: '&copy; OpenStreetMap contributors'
+}).addTo(map);
 
-  let overlay;
-  let markers = [];
+let overlay;
+let imageBounds;
+let gpsTrack = [];
 
-  // Upload image overlay
-  document.getElementById('upload').addEventListener('change', function(e) {
-    const file = e.target.files[0];
-    const reader = new FileReader();
+document.getElementById('upload').addEventListener('change', function(e) {
+  const file = e.target.files[0];
+  const reader = new FileReader();
 
-    reader.onload = function(event) {
-      const bounds = map.getBounds();
+  reader.onload = function(event) {
 
-      if (overlay) map.removeLayer(overlay);
+    imageBounds = map.getBounds();
 
-      overlay = L.imageOverlay(event.target.result, bounds, {
-        opacity: 0.7
-      }).addTo(map);
+    if (overlay) map.removeLayer(overlay);
+
+    overlay = L.imageOverlay(event.target.result, imageBounds, {
+      opacity: 0.6
+    }).addTo(map);
+
+    const img = new Image();
+    img.onload = function() {
+      const canvas = document.getElementById("canvas");
+      canvas.width = img.width;
+      canvas.height = img.height;
+
+      const ctx = canvas.getContext("2d");
+      ctx.drawImage(img, 0, 0);
     };
+    img.src = event.target.result;
+  };
 
-    reader.readAsDataURL(file);
-  });
+  reader.readAsDataURL(file);
+});
 
-  // Click map to create GPX points
-  map.on('click', function(e) {
-    const marker = L.marker(e.latlng).addTo(map);
-    markers.push(e.latlng);
-  });
+function generateTrack() {
+  const canvas = document.getElementById("canvas");
+  const ctx = canvas.getContext("2d");
+  const data = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
 
-  function exportGPX() {
-    if (markers.length === 0) return;
+  gpsTrack = [];
 
-    let gpx = `<?xml version="1.0" encoding="UTF-8"?>
-<gpx version="1.1" creator="CustomTool">
-<trk><name>Route</name><trkseg>`;
+  for (let y = 0; y < canvas.height; y += 3) {
+    for (let x = 0; x < canvas.width; x += 3) {
 
-    markers.forEach(pt => {
-      gpx += `<trkpt lat="${pt.lat}" lon="${pt.lng}"></trkpt>`;
+      const i = (y * canvas.width + x) * 4;
+      const r = data[i];
+      const g = data[i+1];
+      const b = data[i+2];
+
+      const brightness = (r + g + b) / 3;
+
+      if (brightness < 100) { // detect dark sketch pixels
+
+        const west = imageBounds.getWest();
+        const east = imageBounds.getEast();
+        const north = imageBounds.getNorth();
+        const south = imageBounds.getSouth();
+
+        const lng = west + (x / canvas.width) * (east - west);
+        const lat = north - (y / canvas.height) * (north - south);
+
+        gpsTrack.push([lat, lng]);
+      }
+    }
+  }
+
+  // Sort by nearest neighbor for single continuous track
+  gpsTrack = sortNearest(gpsTrack);
+
+  L.polyline(gpsTrack, {color: 'red'}).addTo(map);
+
+  alert("Track generated!");
+}
+
+function sortNearest(points) {
+  const ordered = [points.shift()];
+
+  while (points.length) {
+    const last = ordered[ordered.length - 1];
+
+    let minDist = Infinity;
+    let minIndex = 0;
+
+    points.forEach((pt, i) => {
+      const d = Math.hypot(pt[0]-last[0], pt[1]-last[1]);
+      if (d < minDist) {
+        minDist = d;
+        minIndex = i;
+      }
     });
 
-    gpx += `</trkseg></trk></gpx>`;
-
-    const blob = new Blob([gpx], { type: "application/gpx+xml" });
-    const url = URL.createObjectURL(blob);
-
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "route.gpx";
-    a.click();
+    ordered.push(points.splice(minIndex, 1)[0]);
   }
+
+  return ordered;
+}
+
+function exportGPX() {
+  if (!gpsTrack.length) return;
+
+  let gpx = `<?xml version="1.0" encoding="UTF-8"?>
+<gpx version="1.1" creator="SketchTool">
+<trk><name>Sketch Route</name><trkseg>`;
+
+  gpsTrack.forEach(pt => {
+    gpx += `<trkpt lat="${pt[0]}" lon="${pt[1]}"></trkpt>`;
+  });
+
+  gpx += `</trkseg></trk></gpx>`;
+
+  const blob = new Blob([gpx], { type: "application/gpx+xml" });
+  const url = URL.createObjectURL(blob);
+
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "route.gpx";
+  a.click();
+}
 </script>
 
 </body>
